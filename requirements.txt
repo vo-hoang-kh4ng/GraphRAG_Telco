@@ -1,0 +1,8 @@
+neo4j>=5.20,<6
+python-dotenv>=1.0
+rich>=13.7
+pytest>=8.0
+
+# Optional: uncomment to use a real LLM instead of the built-in MockLLM
+# anthropic>=0.40
+# openai>=1.50

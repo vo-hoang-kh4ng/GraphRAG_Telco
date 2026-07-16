@@ -1,0 +1,110 @@
+"""Synthesis module (section 6): merges Rule Engine + GraphRAG output into a
+single ranked recommendation for the NOC engineer, with a suggested action.
+
+When both sources point at the same device the confidences are combined via
+the same MYCIN-style certainty-factor formula used inside the rule engine,
+plus a small cross-validation boost -- this is the "kiem chung cheo"
+(cross-validation) behaviour called out in section 5.3 of the đề cương.
+"""
+
+from dataclasses import dataclass, field
+
+CROSS_VALIDATION_BOOST = 0.1
+MAX_CONFIDENCE = 0.99
+
+ACTION_TEMPLATES = {
+    "transmission": (
+        "Kiem tra tuyen truyen dan / cap quang vat ly tai {device}; dieu phoi doi ky thuat hien "
+        "truong kiem tra suy hao / dut soi quang neu can."
+    ),
+    "router": (
+        "Kiem tra trang thai phan cung va module uplink cua router {device}; xem xet khoi dong lai "
+        "hoac thay module neu loi lap lai."
+    ),
+    "olt": (
+        "Kiem tra cong suat quang (optical power) tai OLT {device} va cac soi quang PON lien quan."
+    ),
+    "gnodeb": (
+        "Kiem tra trang thai phan cung module vo tuyen tai gNodeB/BTS {device}; doi chieu lich su "
+        "bao tri gan nhat."
+    ),
+}
+
+
+@dataclass
+class RankedCause:
+    device_id: str
+    combined_confidence: float
+    sources: list = field(default_factory=list)
+    rule_confidence: float = None
+    rule_explanation: str = None
+    graphrag_confidence: float = None
+    graphrag_explanation: str = None
+    agreement: bool = False
+
+
+def _combine_certainty_factors(confidences):
+    combined = 0.0
+    for c in confidences:
+        combined = combined + c * (1 - combined)
+    return combined
+
+
+def combine(rule_candidates, graphrag_result):
+    """rule_candidates: list[RuleCandidate] (src.rules.rule_engine).
+    graphrag_result: GraphRAGResult (src.graphrag.pipeline), possibly with
+    root_cause_device=None if GraphRAG could not diagnose anything.
+    """
+    merged = {}
+
+    for rc in rule_candidates:
+        merged[rc.device_id] = {
+            "rule_confidence": rc.confidence,
+            "rule_explanation": rc.explanation,
+            "graphrag_confidence": None,
+            "graphrag_explanation": None,
+        }
+
+    if graphrag_result and graphrag_result.root_cause_device:
+        entry = merged.setdefault(
+            graphrag_result.root_cause_device,
+            {"rule_confidence": None, "rule_explanation": None, "graphrag_confidence": None, "graphrag_explanation": None},
+        )
+        entry["graphrag_confidence"] = graphrag_result.confidence
+        entry["graphrag_explanation"] = graphrag_result.explanation
+
+    ranked = []
+    for device_id, e in merged.items():
+        confs = [c for c in (e["rule_confidence"], e["graphrag_confidence"]) if c is not None]
+        combined_conf = _combine_certainty_factors(confs)
+        agreement = e["rule_confidence"] is not None and e["graphrag_confidence"] is not None
+        if agreement:
+            combined_conf = min(MAX_CONFIDENCE, combined_conf + CROSS_VALIDATION_BOOST)
+        sources = []
+        if e["rule_confidence"] is not None:
+            sources.append("rule_engine")
+        if e["graphrag_confidence"] is not None:
+            sources.append("graphrag")
+
+        ranked.append(
+            RankedCause(
+                device_id=device_id,
+                combined_confidence=round(combined_conf, 4),
+                sources=sources,
+                rule_confidence=e["rule_confidence"],
+                rule_explanation=e["rule_explanation"],
+                graphrag_confidence=e["graphrag_confidence"],
+                graphrag_explanation=e["graphrag_explanation"],
+                agreement=agreement,
+            )
+        )
+
+    ranked.sort(key=lambda r: r.combined_confidence, reverse=True)
+    return ranked
+
+
+def suggest_action(device_id, subgraph):
+    device = next((d for d in subgraph["devices"] if d["id"] == device_id), None)
+    device_type = device["type"] if device else None
+    template = ACTION_TEMPLATES.get(device_type, "Kiem tra thu cong thiet bi {device} de xac dinh nguyen nhan cu the.")
+    return template.format(device=device_id)
