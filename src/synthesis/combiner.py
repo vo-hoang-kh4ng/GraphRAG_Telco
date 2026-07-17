@@ -12,6 +12,16 @@ from dataclasses import dataclass, field
 CROSS_VALIDATION_BOOST = 0.1
 MAX_CONFIDENCE = 0.99
 
+# A GraphRAG/LLM candidate that no rule corroborates is discounted before
+# ranking: rules are verified, deterministic domain logic, while a lone LLM
+# opinion -- even a confident-sounding one -- is a single unverified guess.
+# Without this, a real (non-mock) LLM's mis-calibrated self-reported
+# confidence can outrank a correct, uncorroborated rule-engine candidate
+# (observed in practice: Groq/Llama on SCN-05, see README). Rule-only
+# candidates are NOT discounted the same way -- hand-authored production
+# rules don't need a second opinion to be trusted.
+UNCORROBORATED_GRAPHRAG_DISCOUNT = 0.7
+
 ACTION_TEMPLATES = {
     "transmission": (
         "Kiem tra tuyen truyen dan / cap quang vat ly tai {device}; dieu phoi doi ky thuat hien "
@@ -75,9 +85,16 @@ def combine(rule_candidates, graphrag_result):
 
     ranked = []
     for device_id, e in merged.items():
-        confs = [c for c in (e["rule_confidence"], e["graphrag_confidence"]) if c is not None]
+        rule_conf = e["rule_confidence"]
+        graphrag_conf = e["graphrag_confidence"]
+        agreement = rule_conf is not None and graphrag_conf is not None
+
+        effective_graphrag_conf = graphrag_conf
+        if graphrag_conf is not None and rule_conf is None:
+            effective_graphrag_conf = graphrag_conf * UNCORROBORATED_GRAPHRAG_DISCOUNT
+
+        confs = [c for c in (rule_conf, effective_graphrag_conf) if c is not None]
         combined_conf = _combine_certainty_factors(confs)
-        agreement = e["rule_confidence"] is not None and e["graphrag_confidence"] is not None
         if agreement:
             combined_conf = min(MAX_CONFIDENCE, combined_conf + CROSS_VALIDATION_BOOST)
         sources = []

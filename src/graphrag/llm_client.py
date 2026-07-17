@@ -11,6 +11,7 @@ other code in the pipeline needs to change to swap between them.
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 
 from src.kg.sample_data import HISTORICAL_INCIDENTS
@@ -21,8 +22,10 @@ CASE_MATCH_JACCARD_THRESHOLD = 0.5
 
 DIAGNOSTIC_QUESTION = (
     "Dua tren ngu canh Knowledge Graph ben duoi, hay xac dinh thiet bi nao la NGUYEN NHAN GOC RE "
-    "(root cause) cua su co, va giai thich ngan gon ly do. Tra loi duoi dang JSON voi cac truong: "
-    "root_cause_device, confidence (0-1), explanation."
+    "(root cause) cua su co, va giai thich ngan gon ly do. CHI tra loi bang MOT doi tuong JSON hop le, "
+    "khong them bat ky van ban, giai thich hay markdown nao khac ngoai JSON. JSON phai co dung cac "
+    'truong: root_cause_device (string), confidence (so thuc 0-1), explanation (string). '
+    'Vi du dinh dang: {"root_cause_device": "docker_003", "confidence": 0.8, "explanation": "..."}'
 )
 
 
@@ -208,12 +211,43 @@ class OpenAILLM(LLMClient):
         return _parse_llm_json(response.choices[0].message.content)
 
 
+class GroqLLM(LLMClient):
+    def __init__(self, model="llama-3.3-70b-versatile"):
+        try:
+            from groq import Groq
+        except ImportError as e:
+            raise RuntimeError("pip install groq to use LLM_PROVIDER=groq") from e
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            raise RuntimeError("GROQ_API_KEY is not set")
+        self._client = Groq(api_key=api_key)
+        self._model = model
+
+    def diagnose(self, context_text, subgraph):
+        response = self._client.chat.completions.create(
+            model=self._model,
+            messages=[{"role": "user", "content": f"{context_text}\n\n{DIAGNOSTIC_QUESTION}"}],
+        )
+        return _parse_llm_json(response.choices[0].message.content)
+
+
+def _extract_json_object(raw_text):
+    """Real LLMs (esp. smaller/open models via Groq) often wrap the JSON answer
+    in prose reasoning and/or a ```json fenced block instead of returning pure
+    JSON. Try, in order: a fenced ```json block anywhere in the text, then the
+    outermost {...} span, then the raw text as-is.
+    """
+    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw_text, re.DOTALL)
+    if fenced:
+        return fenced.group(1)
+    brace_span = re.search(r"\{.*\}", raw_text, re.DOTALL)
+    if brace_span:
+        return brace_span.group(0)
+    return raw_text.strip()
+
+
 def _parse_llm_json(raw_text):
-    raw_text = raw_text.strip()
-    if raw_text.startswith("```"):
-        raw_text = raw_text.strip("`")
-        raw_text = raw_text.split("\n", 1)[1] if "\n" in raw_text else raw_text
-    data = json.loads(raw_text)
+    data = json.loads(_extract_json_object(raw_text))
     return LLMDiagnosis(
         root_cause_device=data.get("root_cause_device"),
         confidence=float(data.get("confidence", 0.0)),
@@ -230,4 +264,6 @@ def get_llm_client():
         return AnthropicLLM()
     if provider == "openai":
         return OpenAILLM()
+    if provider == "groq":
+        return GroqLLM()
     raise ValueError(f"Unknown LLM_PROVIDER: {provider}")

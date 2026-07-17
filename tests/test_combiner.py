@@ -58,3 +58,20 @@ def test_graphrag_none_root_cause_is_ignored():
     assert len(ranked) == 1
     assert ranked[0].device_id == "OLT-B1"
     assert ranked[0].sources == ["rule_engine"]
+
+
+def test_uncorroborated_graphrag_does_not_outrank_correct_rule_only_candidate():
+    """Regression test: a real (non-mock) LLM can be confidently wrong (observed
+    with Groq/Llama on SCN-05 -- see README). An uncorroborated GraphRAG
+    candidate must not outrank a correct, uncorroborated rule-engine candidate
+    just because the LLM reported a higher raw confidence.
+    """
+    rule_candidates = [FakeRuleCandidate(device_id="OLT-B1", confidence=0.65)]
+    graphrag_result = FakeGraphRAGResult(root_cause_device="RTR-EDGE-2", confidence=0.8)
+
+    ranked = combine(rule_candidates, graphrag_result)
+
+    assert ranked[0].device_id == "OLT-B1"
+    # Raw (undiscounted) confidences are still reported for transparency.
+    wrong = next(r for r in ranked if r.device_id == "RTR-EDGE-2")
+    assert wrong.graphrag_confidence == 0.8

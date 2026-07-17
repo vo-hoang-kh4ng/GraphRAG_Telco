@@ -1,6 +1,6 @@
 # GraphRAG_Telco
 
-Prototype cho đề tài tiểu luận **"Hệ thống hỗ trợ phân tích và chẩn đoán sự cố mạng viễn thông sử dụng Knowledge Graph, GraphRAG và Rule-Based Reasoning"** (học phần Biểu diễn tri thức và ứng dụng).
+Prototype cho đề tài tiểu luận **"Hệ thống hỗ trợ phân tích và chẩn đoán sự cố hệ thống mạng và dịch vụ CNTT sử dụng Knowledge Graph, GraphRAG và Rule-Based Reasoning"** (học phần Biểu diễn tri thức và ứng dụng). Trọng tâm vẫn là mạng viễn thông (mô phỏng); tên đề tài mở rộng nhẹ để bao trùm luôn phần đối chiếu trên dữ liệu thật ngoài miền viễn thông (xem mục "Dữ liệu thật" bên dưới).
 
 ## Kiến trúc (bám theo mục 6 của đề cương)
 
@@ -16,7 +16,7 @@ scripts/       fetch_dejavu.py -- tải + parse dữ liệu thật, tái tạo s
 tests/         Unit test cho rule engine, context builder, mock LLM, combiner, dữ liệu DejaVu (chạy không cần Neo4j)
 ```
 
-LLM mặc định là `MockLLM` (không cần API key, chạy offline hoàn toàn) — xem `src/graphrag/llm_client.py`. Có thể chuyển sang Anthropic/OpenAI thật bằng biến môi trường `LLM_PROVIDER`.
+LLM mặc định là `MockLLM` (không cần API key, chạy offline hoàn toàn) — xem `src/graphrag/llm_client.py`. Có thể chuyển sang Anthropic/OpenAI/Groq thật bằng biến môi trường `LLM_PROVIDER`.
 
 ## Cài đặt
 
@@ -81,8 +81,10 @@ Các test dựng `facts` / `subgraph` trực tiếp từ dữ liệu mẫu (`src
 Trong `.env`:
 
 ```
-LLM_PROVIDER=anthropic        # hoặc openai
-ANTHROPIC_API_KEY=sk-ant-...
+LLM_PROVIDER=groq              # hoặc anthropic / openai
+GROQ_API_KEY=gsk_...
 ```
 
-Không cần sửa code — `src/graphrag/llm_client.get_llm_client()` sẽ tự chọn client theo `LLM_PROVIDER`.
+Không cần sửa code — `src/graphrag/llm_client.get_llm_client()` sẽ tự chọn client theo `LLM_PROVIDER`. Chạy thật với Groq (`llama-3.3-70b-versatile`) trên 5 kịch bản viễn thông cho kết quả GraphRAG-only 4/5 đúng ngay; kịch bản còn lại (SCN-05, suy giảm KPI không có alarm cứng) bị LLM đoán sai — một phát hiện thật, không phải bug, minh hoạ đúng lý do đề cương (mục 5.3) đưa Rule Engine vào để "kiểm chứng chéo" cho LLM.
+
+**Lưu ý về độ tin cậy khi dùng LLM thật:** một LLM thật có thể tự báo cáo confidence cao dù trả lời sai (không được hiệu chỉnh tốt như MockLLM). Module tổng hợp (`src/synthesis/combiner.py`) vì vậy **chiết khấu** (hệ số `UNCORROBORATED_GRAPHRAG_DISCOUNT = 0.7`) độ tin cậy của một ứng viên chỉ đến từ GraphRAG mà không có luật nào đồng thuận — tránh để một câu trả lời LLM tự tin nhưng sai lấn át một ứng viên đúng từ Rule Engine (luật là tri thức đã được kiểm chứng, xứng đáng được tin hơn một phỏng đoán đơn lẻ của LLM khi không có gì xác nhận). Xem `test_uncorroborated_graphrag_does_not_outrank_correct_rule_only_candidate` trong `tests/test_combiner.py`.
