@@ -38,6 +38,24 @@ ACTION_TEMPLATES = {
         "Kiem tra trang thai phan cung module vo tuyen tai gNodeB/BTS {device}; doi chieu lich su "
         "bao tri gan nhat."
     ),
+    # DejaVu real-data device types (src/kg/dejavu_data.py) -- IT-ops/microservice, not telecom.
+    "docker": (
+        "Kiem tra tai nguyen CPU/memory va log cua container {device}; xem xet restart container "
+        "hoac dieu chinh gioi han tai nguyen neu loi CPU/network lap lai."
+    ),
+    "db": (
+        "Kiem tra connection pool, so session dang mo va trang thai ket noi cua database {device}; "
+        "xem xet tang gioi han connection hoac kiem tra duong truyen mang toi DB neu gap loi "
+        "'connection limit' / 'db close'."
+    ),
+    "os": (
+        "Kiem tra tai nguyen he thong (CPU, network interface, hang doi goi tin) cua host {device}; "
+        "xac dinh co phai do nghen bang thong hoac loi phan cung mang khong."
+    ),
+    "osb": (
+        "Kiem tra Online Service Bus {device}: hang doi xu ly, ty le xu ly thanh cong (succ_rate); "
+        "xac dinh co nghen tai tang gateway/entry-point khong."
+    ),
 }
 
 
