@@ -3,7 +3,8 @@ python-dotenv>=1.0
 rich>=13.7
 pytest>=8.0
 pyyaml>=6.0  # only needed to re-run scripts/fetch_dejavu.py
-streamlit>=1.38  # web demo, run: streamlit run app.py
+streamlit>=1.50  # web demo, run: streamlit run app.py (needs st.iframe)
+pyvis>=0.3  # subgraph node/edge visualization inside app.py
 
 # Optional: uncomment to use a real LLM instead of the built-in MockLLM
 # anthropic>=0.40

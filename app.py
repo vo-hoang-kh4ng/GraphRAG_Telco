@@ -6,6 +6,7 @@ Chạy: streamlit run app.py
 
 import streamlit as st
 
+from src.graphrag.graph_viz import build_subgraph_html
 from src.graphrag.pipeline import run_graphrag
 from src.kg import graph_builder
 from src.kg.connection import Neo4jConnection
@@ -106,8 +107,19 @@ def render_diagnosis_tab(conn):
             else:
                 st.warning("GraphRAG không đưa ra được chẩn đoán (thiếu dữ liệu).")
             st.write(graphrag_result.explanation)
-            with st.expander("Xem ngữ cảnh subgraph gửi cho LLM"):
-                st.code(graphrag_result.context_text, language="markdown")
+
+        st.subheader("🗺️ Sơ đồ đồ thị con (subgraph) được GraphRAG truy xuất")
+        st.caption(
+            "🔴 thiết bị đang có alarm · 🟠 chỉ có KPI bất thường · 🟡 (ngôi sao) nguyên nhân gốc rễ được chẩn đoán "
+            "· 🔵 thiết bị khác trong phạm vi topology · viền đậm = điểm khởi phát sự cố. Cạnh mũi tên = quan hệ "
+            "phụ_thuộc_vào (DEPENDS_ON), hướng từ thiết bị con sang thiết bị cha."
+        )
+        top_device = ranked[0].device_id if ranked else None
+        graph_html = build_subgraph_html(graphrag_result.subgraph, root_cause_device=top_device)
+        st.iframe(graph_html, height=500)
+
+        with st.expander("Xem ngữ cảnh dạng văn bản gửi cho LLM"):
+            st.code(graphrag_result.context_text, language="markdown")
 
         st.divider()
         st.subheader("✅ Khuyến nghị tổng hợp (Rule Engine + GraphRAG)")
