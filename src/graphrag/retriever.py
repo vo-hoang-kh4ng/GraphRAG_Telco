@@ -54,7 +54,9 @@ def retrieve_subgraph(conn, incident_id, hops=DEFAULT_HOPS):
         }
 
     # Same dedup caveat as _seed_devices: collapse duplicate (seed, neighbor)
-    # rows in Python rather than relying on Cypher DISTINCT here.
+    # rows in Python rather than relying on Cypher DISTINCT here. A neighbor
+    # may also have more than one DEPENDS_ON parent (DAG, not a tree), so
+    # parent ids are collected into a list per device instead of overwritten.
     device_rows = conn.run(
         f"""
         MATCH (seed:{schema.LABEL_DEVICE}) WHERE seed.id IN $seed_ids
@@ -66,7 +68,17 @@ def retrieve_subgraph(conn, incident_id, hops=DEFAULT_HOPS):
         """,
         {"seed_ids": seed_ids},
     )
-    devices = list({r["id"]: dict(r) for r in device_rows}.values())
+    devices_by_id = {}
+    for r in device_rows:
+        d = devices_by_id.setdefault(
+            r["id"], {"id": r["id"], "type": r["type"], "name": r["name"], "site_name": r["site_name"], "parent_ids": set()}
+        )
+        if r["parent_id"]:
+            d["parent_ids"].add(r["parent_id"])
+    devices = []
+    for d in devices_by_id.values():
+        d["parent_ids"] = sorted(d["parent_ids"])
+        devices.append(d)
     device_ids = [d["id"] for d in devices]
 
     alarm_rows = conn.run(

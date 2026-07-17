@@ -11,7 +11,8 @@ def build_context_text(subgraph):
 
     lines.append("## Thiet bi lien quan (topology, pham vi {} hop quanh thiet bi phat sinh su co)".format(2))
     for d in subgraph["devices"]:
-        parent_part = f", phu_thuoc_vao={d['parent_id']}" if d["parent_id"] else " (khong co thiet bi cha - dinh goc)"
+        parents = d.get("parent_ids") or []
+        parent_part = f", phu_thuoc_vao={', '.join(parents)}" if parents else " (khong co thiet bi cha - dinh goc)"
         site_part = f", site={d['site_name']}" if d.get("site_name") else ""
         seed_tag = " [DIEM_KHOI_PHAT]" if d["id"] in subgraph["seed_devices"] else ""
         lines.append(f"- {d['id']} (loai={d['type']}, ten={d['name']}{parent_part}{site_part}){seed_tag}")

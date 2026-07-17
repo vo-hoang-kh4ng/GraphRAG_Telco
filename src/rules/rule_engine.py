@@ -27,7 +27,12 @@ class RuleCandidate:
 
 
 def fetch_facts(conn):
-    """Pull the current KG state needed by the rules into plain Python structures."""
+    """Pull the current KG state needed by the rules into plain Python structures.
+
+    A device may DEPENDS_ON more than one parent (e.g. a service that calls
+    several backends, or runs on a host it also depends on) -- topology is a
+    DAG, not necessarily a tree, so `parents_of[device]` is always a list.
+    """
 
     device_rows = conn.run(
         f"""
@@ -36,12 +41,18 @@ def fetch_facts(conn):
         RETURN d.id AS id, d.type AS type, parent.id AS parent_id
         """
     )
-    devices = {r["id"]: {"type": r["type"], "parent_id": r["parent_id"]} for r in device_rows}
+    devices = {}
+    parents_of = {}
+    for r in device_rows:
+        devices.setdefault(r["id"], {"type": r["type"]})
+        parents_of.setdefault(r["id"], [])
+        if r["parent_id"]:
+            parents_of[r["id"]].append(r["parent_id"])
 
     children_of = {}
-    for dev_id, info in devices.items():
-        if info["parent_id"]:
-            children_of.setdefault(info["parent_id"], []).append(dev_id)
+    for dev_id, parents in parents_of.items():
+        for parent_id in parents:
+            children_of.setdefault(parent_id, []).append(dev_id)
 
     alarm_rows = conn.run(
         f"""
@@ -67,6 +78,7 @@ def fetch_facts(conn):
 
     return {
         "devices": devices,
+        "parents_of": parents_of,
         "children_of": children_of,
         "alarms_by_device": alarms_by_device,
         "kpis_by_device": kpis_by_device,
@@ -116,18 +128,19 @@ def rule_cascading_parent_failure(facts):
 
 # --- Rule B: isolated device fault ------------------------------------------
 def rule_isolated_device_fault(facts):
-    """IF X itself raises an alarm AND X's parent has no alarm AND X's children
-    (if any) show no alarm (KPI degradation at most) THEN root cause = X.
+    """IF X itself raises an alarm AND none of X's parents have an alarm AND
+    X's children (if any) show no alarm (KPI degradation at most) THEN root
+    cause = X.
     """
     candidates = []
-    devices, children_of = facts["devices"], facts["children_of"]
+    devices, children_of, parents_of = facts["devices"], facts["children_of"], facts["parents_of"]
     alarms_by_device = facts["alarms_by_device"]
 
-    for dev_id, info in devices.items():
+    for dev_id in devices:
         if not _has_any_alarm(alarms_by_device, dev_id):
             continue
-        parent_id = info["parent_id"]
-        if parent_id and _has_any_alarm(alarms_by_device, parent_id):
+        parents = parents_of.get(dev_id, [])
+        if any(_has_any_alarm(alarms_by_device, p) for p in parents):
             continue
         children = children_of.get(dev_id, [])
         if any(_has_any_alarm(alarms_by_device, c) for c in children):
@@ -139,8 +152,8 @@ def rule_isolated_device_fault(facts):
                 rule_id="R2_isolated_device_fault",
                 rule_name="Isolated device fault",
                 explanation=(
-                    f"{dev_id} phat canh bao trong khi thiet bi cha"
-                    f"{(' (' + parent_id + ')') if parent_id else ''} va cac thiet bi con "
+                    f"{dev_id} phat canh bao trong khi (cac) thiet bi cha"
+                    f"{(' (' + ', '.join(parents) + ')') if parents else ''} va cac thiet bi con "
                     f"khong phat canh bao nao -> su co khu tru tai {dev_id}, khong lan truyen."
                 ),
             )

@@ -15,15 +15,15 @@ SITES = [
 # `depends_on` encodes the physical/logical dependency chain used by the rule
 # engine and GraphRAG retriever for multi-hop cause-effect reasoning.
 DEVICES = [
-    {"id": "TRANS-CORE-1", "type": "transmission", "name": "Core Transmission Node A", "site": "SITE_A", "depends_on": None},
-    {"id": "RTR-EDGE-1", "type": "router", "name": "Edge Router A1", "site": "SITE_A", "depends_on": "TRANS-CORE-1"},
-    {"id": "OLT-A1", "type": "olt", "name": "OLT A1", "site": "SITE_A", "depends_on": "RTR-EDGE-1"},
-    {"id": "GNB-A1", "type": "gnodeb", "name": "gNodeB A1", "site": "SITE_A", "depends_on": "RTR-EDGE-1"},
-    {"id": "GNB-A2", "type": "gnodeb", "name": "gNodeB A2", "site": "SITE_A", "depends_on": "RTR-EDGE-1"},
-    {"id": "TRANS-CORE-2", "type": "transmission", "name": "Core Transmission Node B", "site": "SITE_B", "depends_on": None},
-    {"id": "RTR-EDGE-2", "type": "router", "name": "Edge Router B1", "site": "SITE_B", "depends_on": "TRANS-CORE-2"},
-    {"id": "OLT-B1", "type": "olt", "name": "OLT B1", "site": "SITE_B", "depends_on": "RTR-EDGE-2"},
-    {"id": "GNB-B1", "type": "gnodeb", "name": "gNodeB B1", "site": "SITE_B", "depends_on": "RTR-EDGE-2"},
+    {"id": "TRANS-CORE-1", "type": "transmission", "name": "Core Transmission Node A", "site": "SITE_A", "depends_on": []},
+    {"id": "RTR-EDGE-1", "type": "router", "name": "Edge Router A1", "site": "SITE_A", "depends_on": ["TRANS-CORE-1"]},
+    {"id": "OLT-A1", "type": "olt", "name": "OLT A1", "site": "SITE_A", "depends_on": ["RTR-EDGE-1"]},
+    {"id": "GNB-A1", "type": "gnodeb", "name": "gNodeB A1", "site": "SITE_A", "depends_on": ["RTR-EDGE-1"]},
+    {"id": "GNB-A2", "type": "gnodeb", "name": "gNodeB A2", "site": "SITE_A", "depends_on": ["RTR-EDGE-1"]},
+    {"id": "TRANS-CORE-2", "type": "transmission", "name": "Core Transmission Node B", "site": "SITE_B", "depends_on": []},
+    {"id": "RTR-EDGE-2", "type": "router", "name": "Edge Router B1", "site": "SITE_B", "depends_on": ["TRANS-CORE-2"]},
+    {"id": "OLT-B1", "type": "olt", "name": "OLT B1", "site": "SITE_B", "depends_on": ["RTR-EDGE-2"]},
+    {"id": "GNB-B1", "type": "gnodeb", "name": "gNodeB B1", "site": "SITE_B", "depends_on": ["RTR-EDGE-2"]},
 ]
 
 # --- Services -------------------------------------------------------------------

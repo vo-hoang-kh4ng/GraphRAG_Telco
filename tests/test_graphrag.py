@@ -10,7 +10,7 @@ from src.kg.sample_data import DEVICES, SCENARIOS
 
 def build_fake_subgraph(scenario):
     devices = [
-        {"id": d["id"], "type": d["type"], "name": d["name"], "parent_id": d["depends_on"], "site_name": None}
+        {"id": d["id"], "type": d["type"], "name": d["name"], "parent_ids": list(d["depends_on"]), "site_name": None}
         for d in DEVICES
     ]
     alarms = [{"device_id": a["device"], "type": a["type"], "severity": a["severity"]} for a in scenario["alarms"]]

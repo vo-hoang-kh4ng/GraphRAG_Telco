@@ -8,11 +8,12 @@ from src.rules.rule_engine import evaluate_rules, merge_candidates
 
 
 def facts_for_scenario(scenario):
-    devices = {d["id"]: {"type": d["type"], "parent_id": d["depends_on"]} for d in DEVICES}
+    devices = {d["id"]: {"type": d["type"]} for d in DEVICES}
+    parents_of = {d["id"]: list(d["depends_on"]) for d in DEVICES}
     children_of = {}
-    for dev_id, info in devices.items():
-        if info["parent_id"]:
-            children_of.setdefault(info["parent_id"], []).append(dev_id)
+    for dev_id, parents in parents_of.items():
+        for parent_id in parents:
+            children_of.setdefault(parent_id, []).append(dev_id)
 
     alarms_by_device = {}
     for a in scenario["alarms"]:
@@ -24,6 +25,7 @@ def facts_for_scenario(scenario):
 
     return {
         "devices": devices,
+        "parents_of": parents_of,
         "children_of": children_of,
         "alarms_by_device": alarms_by_device,
         "kpis_by_device": kpis_by_device,
@@ -53,5 +55,5 @@ def test_cascading_rule_beats_isolated_rule_confidence():
 
 
 def test_no_facts_yields_no_candidates():
-    facts = {"devices": {}, "children_of": {}, "alarms_by_device": {}, "kpis_by_device": {}}
+    facts = {"devices": {}, "parents_of": {}, "children_of": {}, "alarms_by_device": {}, "kpis_by_device": {}}
     assert merge_candidates(evaluate_rules(facts)) == []

@@ -20,43 +20,60 @@ def build_constraints(conn):
         conn.run_write(f"CREATE CONSTRAINT IF NOT EXISTS FOR (n:{label}) REQUIRE n.id IS UNIQUE")
 
 
-def load_static_topology(conn):
-    """Load sites, devices (+ topology edges), services and historical incidents."""
+def load_devices(conn, devices):
+    """Load Device nodes and their DEPENDS_ON edges.
 
+    `devices` items: {"id", "name", "type", "depends_on": [parent_id, ...]}.
+    `depends_on` is a list because topology is a DAG, not necessarily a tree
+    (e.g. a service that calls several backends and also depends on the host
+    it runs on) -- an empty list means a root node with no upstream dependency.
+    """
+    conn.run_write(
+        f"""
+        UNWIND $devices AS d
+        MERGE (dev:{schema.LABEL_DEVICE} {{id: d.id}})
+        SET dev.name = d.name, dev.type = d.type
+        """,
+        {"devices": devices},
+    )
+    conn.run_write(
+        f"""
+        UNWIND $devices AS d
+        MATCH (child:{schema.LABEL_DEVICE} {{id: d.id}})
+        WITH child, d
+        UNWIND d.depends_on AS parent_id
+        MATCH (parent:{schema.LABEL_DEVICE} {{id: parent_id}})
+        MERGE (child)-[:{schema.REL_DEPENDS_ON}]->(parent)
+        MERGE (child)-[:{schema.REL_CONNECTS_TO}]->(parent)
+        """,
+        {"devices": devices},
+    )
+
+
+def load_sites(conn, sites):
     conn.run_write(
         f"""
         UNWIND $sites AS s
         MERGE (site:{schema.LABEL_SITE} {{id: s.id}})
         SET site.name = s.name, site.region = s.region
         """,
-        {"sites": SITES},
+        {"sites": sites},
     )
 
+
+def attach_devices_to_sites(conn, devices):
     conn.run_write(
         f"""
         UNWIND $devices AS d
-        MERGE (dev:{schema.LABEL_DEVICE} {{id: d.id}})
-        SET dev.name = d.name, dev.type = d.type
-        WITH dev, d
+        MATCH (dev:{schema.LABEL_DEVICE} {{id: d.id}})
         MATCH (site:{schema.LABEL_SITE} {{id: d.site}})
         MERGE (dev)-[:{schema.REL_BELONGS_TO_SITE}]->(site)
         """,
-        {"devices": DEVICES},
+        {"devices": devices},
     )
 
-    conn.run_write(
-        f"""
-        UNWIND $devices AS d
-        MATCH (child:{schema.LABEL_DEVICE} {{id: d.id}})
-        WITH child, d
-        WHERE d.depends_on IS NOT NULL
-        MATCH (parent:{schema.LABEL_DEVICE} {{id: d.depends_on}})
-        MERGE (child)-[:{schema.REL_DEPENDS_ON}]->(parent)
-        MERGE (child)-[:{schema.REL_CONNECTS_TO}]->(parent)
-        """,
-        {"devices": DEVICES},
-    )
 
+def load_services(conn, services):
     conn.run_write(
         f"""
         UNWIND $services AS svc
@@ -67,9 +84,11 @@ def load_static_topology(conn):
         MATCH (dev:{schema.LABEL_DEVICE} {{id: dev_id}})
         MERGE (dev)-[:{schema.REL_AFFECTS_SERVICE}]->(s)
         """,
-        {"services": SERVICES},
+        {"services": services},
     )
 
+
+def load_historical_incidents(conn, incidents):
     conn.run_write(
         f"""
         UNWIND $incidents AS inc
@@ -79,8 +98,18 @@ def load_static_topology(conn):
         MATCH (dev:{schema.LABEL_DEVICE} {{id: inc.root_cause_device}})
         MERGE (i)-[:{schema.REL_CAUSED_BY}]->(dev)
         """,
-        {"incidents": HISTORICAL_INCIDENTS},
+        {"incidents": incidents},
     )
+
+
+def load_static_topology(conn):
+    """Load the telecom sites, devices (+ topology edges), services and
+    historical incidents (src/kg/sample_data.py)."""
+    load_sites(conn, SITES)
+    load_devices(conn, DEVICES)
+    attach_devices_to_sites(conn, DEVICES)
+    load_services(conn, SERVICES)
+    load_historical_incidents(conn, HISTORICAL_INCIDENTS)
 
 
 def clear_scenario_state(conn):
@@ -151,7 +180,18 @@ def load_scenario(conn, scenario):
 
 
 def bootstrap(conn):
-    """Convenience: wipe, build constraints, and load the static topology."""
+    """Convenience: wipe, build constraints, and load the telecom static topology."""
     reset_all(conn)
     build_constraints(conn)
     load_static_topology(conn)
+
+
+def bootstrap_devices_only(conn, devices):
+    """Wipe, build constraints, and load a bare Device/DEPENDS_ON topology --
+    no Site/Service/historical-Incident layer. Used to run the same KG +
+    rule engine + GraphRAG pipeline against a different topology/incident
+    dataset (e.g. src/kg/dejavu_data.py) without touching telecom data.
+    """
+    reset_all(conn)
+    build_constraints(conn)
+    load_devices(conn, devices)

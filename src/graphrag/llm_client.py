@@ -47,14 +47,14 @@ class MockLLM(LLMClient):
 
     def diagnose(self, context_text, subgraph):
         alarmed_devices = {a["device_id"] for a in subgraph["alarms"]}
-        parent_by_device = {d["id"]: d["parent_id"] for d in subgraph["devices"]}
+        parents_by_device = {d["id"]: (d.get("parent_ids") or []) for d in subgraph["devices"]}
 
         case_match = self._match_historical_case(alarmed_devices)
         if case_match:
             return case_match
 
         if alarmed_devices:
-            structural = self._structural_diagnosis(alarmed_devices, parent_by_device, subgraph["alarms"])
+            structural = self._structural_diagnosis(alarmed_devices, parents_by_device, subgraph["alarms"])
             if structural:
                 return structural
 
@@ -88,10 +88,11 @@ class MockLLM(LLMClient):
             )
         return None
 
-    def _structural_diagnosis(self, alarmed_devices, parent_by_device, alarms):
-        # Devices whose parent is not (also) alarmed -- topmost alarmed node(s) in the chain.
+    def _structural_diagnosis(self, alarmed_devices, parents_by_device, alarms):
+        # Devices with NO alarmed parent (possibly several parents -- topology is a
+        # DAG) -- the topmost alarmed node(s) in the dependency chain.
         root_candidates = [
-            d for d in alarmed_devices if not parent_by_device.get(d) or parent_by_device.get(d) not in alarmed_devices
+            d for d in alarmed_devices if not (set(parents_by_device.get(d, [])) & alarmed_devices)
         ]
 
         if len(root_candidates) == 1:
@@ -119,9 +120,12 @@ class MockLLM(LLMClient):
             )
 
         if len(root_candidates) >= 2:
-            parents = {parent_by_device.get(d) for d in root_candidates}
-            if len(parents) == 1 and None not in parents:
-                shared_parent = next(iter(parents))
+            common_parents = None
+            for d in root_candidates:
+                pset = set(parents_by_device.get(d, []))
+                common_parents = pset if common_parents is None else (common_parents & pset)
+            if common_parents:
+                shared_parent = sorted(common_parents)[0]
                 return LLMDiagnosis(
                     root_cause_device=shared_parent,
                     confidence=0.65,
