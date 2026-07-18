@@ -41,6 +41,15 @@ class LLMClient:
     def diagnose(self, context_text, subgraph) -> LLMDiagnosis:
         raise NotImplementedError
 
+    def diagnose_stream(self, context_text, subgraph):
+        """Yield raw text chunks as the LLM generates them (for live display in
+        the web demo). Not all providers support this; callers should check
+        `supports_streaming` first and fall back to `diagnose()` otherwise.
+        """
+        raise NotImplementedError
+
+    supports_streaming = False
+
 
 class MockLLM(LLMClient):
     """Offline stand-in LLM. Reasons over `subgraph` directly; ignores nothing
@@ -229,6 +238,24 @@ class GroqLLM(LLMClient):
             messages=[{"role": "user", "content": f"{context_text}\n\n{DIAGNOSTIC_QUESTION}"}],
         )
         return _parse_llm_json(response.choices[0].message.content)
+
+    supports_streaming = True
+
+    def diagnose_stream(self, context_text, subgraph):
+        """Yield raw text chunks as Groq generates them (real token streaming,
+        via the API's `stream=True`) -- used by the web demo to show the LLM
+        "typing" live, proving the call is happening in real time rather than
+        being a canned response.
+        """
+        stream = self._client.chat.completions.create(
+            model=self._model,
+            messages=[{"role": "user", "content": f"{context_text}\n\n{DIAGNOSTIC_QUESTION}"}],
+            stream=True,
+        )
+        for chunk in stream:
+            delta = chunk.choices[0].delta.content
+            if delta:
+                yield delta
 
 
 def _extract_json_object(raw_text):

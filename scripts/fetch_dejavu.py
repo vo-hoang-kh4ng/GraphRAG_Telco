@@ -20,6 +20,7 @@ src/kg/dejavu_data.py. Safe to re-run; the cached zip is reused if present.
 import csv
 import io
 import re
+from datetime import datetime, timezone
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -39,6 +40,29 @@ FAULT_TYPE_MAP = {
     "db  close": "DB_CLOSE",
     "db close": "DB_CLOSE",
 }
+
+# Plain-language Vietnamese gloss for each raw fault_description value, so the
+# demo UI doesn't show untranslated technical jargon straight from the CSV.
+FAULT_TYPE_VI = {
+    "CPU fault": "quá tải CPU",
+    "network delay": "độ trễ mạng cao bất thường",
+    "network loss": "mất gói tin trên mạng",
+    "db connection limit": "vượt giới hạn số kết nối database",
+    "db  close": "mất kết nối / đóng phiên database",
+    "db close": "mất kết nối / đóng phiên database",
+}
+
+DEVICE_CATEGORY_VI = {
+    "docker": "container",
+    "db": "database",
+    "os": "máy chủ vật lý (host)",
+    "osb": "gateway dịch vụ (Online Service Bus)",
+}
+
+
+def device_category_vi(device_id):
+    prefix = device_id.split("_")[0]
+    return DEVICE_CATEGORY_VI.get(prefix, "thiết bị")
 
 
 def download_zip():
@@ -117,21 +141,29 @@ def parse_incidents(faults_csv_text):
     """Return INCIDENTS: list matching the SCENARIOS shape consumed by
     src.kg.graph_builder.load_scenario() -- id/name/description/alarms/
     kpi_anomalies/ground_truth_root_cause.
+
+    `name`/`description` are written in plain Vietnamese (not the raw CSV
+    jargon like "db  close") so the demo UI is understandable without
+    IT-ops background knowledge -- see README "Dữ liệu thật" section.
     """
     reader = csv.DictReader(io.StringIO(faults_csv_text))
     incidents = []
     for idx, row in enumerate(reader, start=1):
         device_id = row["name"]
         fault_desc = row["fault_description"]
+        fault_vi = FAULT_TYPE_VI.get(fault_desc, fault_desc.strip())
+        category = device_category_vi(device_id)
         alarm_type = FAULT_TYPE_MAP.get(fault_desc, re.sub(r"\W+", "_", fault_desc.strip()).upper())
         incident_id = f"DEJAVU-{idx:03d}"
+        readable_time = datetime.fromtimestamp(int(row["timestamp"]), tz=timezone.utc).strftime("%d/%m/%Y %H:%M UTC")
         incidents.append(
             {
                 "id": incident_id,
-                "name": f"{fault_desc.strip()} tren {device_id} (DejaVu #{idx}, timestamp={row['timestamp']})",
+                "name": f"Sự cố #{idx}: {fault_vi} tại {device_id} ({category})",
                 "description": (
-                    f"Su co that tu dataset DejaVu: {device_id} ({row['node_type']}) gap "
-                    f"'{fault_desc.strip()}'. Ground truth root cause node: {row['root_cause_node']}."
+                    f"Sự cố thật #{idx} (dataset DejaVu): thiết bị {device_id} ({category}) gặp "
+                    f"'{fault_vi}' (mã gốc trong dữ liệu: \"{fault_desc.strip()}\"). Ghi nhận lúc "
+                    f"{readable_time}. Nguyên nhân gốc rễ (ground truth): {device_id}."
                 ),
                 "alarms": [{"device": device_id, "type": alarm_type, "severity": "major"}],
                 "kpi_anomalies": [],

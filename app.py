@@ -5,9 +5,13 @@ Chạy: streamlit run app.py
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 
+from src.graphrag.context_builder import build_context_text
 from src.graphrag.graph_viz import build_subgraph_html
-from src.graphrag.pipeline import run_graphrag
+from src.graphrag.llm_client import _parse_llm_json, get_llm_client
+from src.graphrag.pipeline import GraphRAGResult
+from src.graphrag.retriever import retrieve_subgraph
 from src.kg import graph_builder
 from src.kg.connection import Neo4jConnection
 from src.kg.dejavu_data import DEVICES as DEJAVU_DEVICES
@@ -75,10 +79,10 @@ def render_diagnosis_tab(conn):
         with st.spinner("Rule Engine đang suy diễn (IF-THEN)..."):
             rule_candidates = run_rule_engine(conn)
 
-        with st.spinner("GraphRAG đang truy xuất subgraph và hỏi LLM..."):
-            graphrag_result = run_graphrag(conn, incident["id"])
-
-        ranked = combine(rule_candidates, graphrag_result)
+        with st.spinner("GraphRAG đang truy xuất subgraph..."):
+            subgraph = retrieve_subgraph(conn, incident["id"])
+            context_text = build_context_text(subgraph)
+            llm_client = get_llm_client()
 
         col1, col2 = st.columns(2)
 
@@ -98,6 +102,31 @@ def render_diagnosis_tab(conn):
 
         with col2:
             st.subheader("🕸️ GraphRAG (LLM diagnosis)")
+            if getattr(llm_client, "supports_streaming", False):
+                st.caption(f"⏺️ Đang nhận token trực tiếp từ {type(llm_client).__name__} (streaming thật)...")
+                stream_box = st.empty()
+                raw_text = ""
+                for chunk in llm_client.diagnose_stream(context_text, subgraph):
+                    raw_text += chunk
+                    stream_box.markdown(f"```\n{raw_text}▌\n```")
+                stream_box.empty()
+                with st.expander("Xem toàn bộ phản hồi thô (raw) từ LLM, đã stream xong"):
+                    st.code(raw_text, language="markdown")
+                diagnosis = _parse_llm_json(raw_text)
+            else:
+                with st.spinner(f"Đang hỏi {type(llm_client).__name__}..."):
+                    diagnosis = llm_client.diagnose(context_text, subgraph)
+
+            graphrag_result = GraphRAGResult(
+                incident_id=incident["id"],
+                subgraph=subgraph,
+                context_text=context_text,
+                root_cause_device=diagnosis.root_cause_device,
+                confidence=diagnosis.confidence,
+                explanation=diagnosis.explanation,
+                citations=diagnosis.citations,
+            )
+
             if graphrag_result.root_cause_device:
                 st.metric(
                     "Nguyên nhân đề xuất bởi LLM",
@@ -108,6 +137,8 @@ def render_diagnosis_tab(conn):
                 st.warning("GraphRAG không đưa ra được chẩn đoán (thiếu dữ liệu).")
             st.write(graphrag_result.explanation)
 
+        ranked = combine(rule_candidates, graphrag_result)
+
         st.subheader("🗺️ Sơ đồ đồ thị con (subgraph) được GraphRAG truy xuất")
         st.caption(
             "🔴 thiết bị đang có alarm · 🟠 chỉ có KPI bất thường · 🟡 (ngôi sao) nguyên nhân gốc rễ được chẩn đoán "
@@ -116,7 +147,7 @@ def render_diagnosis_tab(conn):
         )
         top_device = ranked[0].device_id if ranked else None
         graph_html = build_subgraph_html(graphrag_result.subgraph, root_cause_device=top_device)
-        st.iframe(graph_html, height=500)
+        components.html(graph_html, height=500, scrolling=False)
 
         with st.expander("Xem ngữ cảnh dạng văn bản gửi cho LLM"):
             st.code(graphrag_result.context_text, language="markdown")

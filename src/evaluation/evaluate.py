@@ -21,9 +21,9 @@ def _top_device(candidates):
     return candidates[0].device_id if candidates else None
 
 
-def evaluate(conn):
+def evaluate(conn, llm_client=None):
     rows = []
-    llm_client = MockLLM()
+    llm_client = llm_client or MockLLM()
 
     for scenario in SCENARIOS:
         graph_builder.load_scenario(conn, scenario)

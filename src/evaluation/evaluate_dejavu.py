@@ -25,9 +25,9 @@ def _top_device(candidates):
     return candidates[0].device_id if candidates else None
 
 
-def evaluate(conn, incidents=None):
+def evaluate(conn, incidents=None, llm_client=None):
     incidents = incidents if incidents is not None else DEJAVU_INCIDENTS
-    llm_client = MockLLM()
+    llm_client = llm_client or MockLLM()
     rows = []
 
     for incident in incidents:

@@ -4,3 +4,7 @@ __pycache__/
 .pytest_cache/
 .env
 scripts/.cache/
+report/*.aux
+report/*.log
+report/*.out
+report/*.toc
