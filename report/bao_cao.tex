@@ -84,8 +84,8 @@
 % ------------------------- TRANG BIA -------------------------
 \begin{titlepage}
 \centering
-{\large HỌC VIỆN NGÂN HÀNG\par}
-{\large KHOA HỆ THỐNG THÔNG TIN QUẢN LÝ\par}
+{\large ĐẠI HỌC QUỐC GIA TP. HỒ CHÍ MINH\par}
+{\large TRƯỜNG ĐẠI HỌC KHOA HỌC TỰ NHIÊN\par}
 \vspace{0.3cm}
 \rule{0.6\textwidth}{0.4pt}\par
 \vspace{2.0cm}
@@ -93,21 +93,17 @@
 {\Large\bfseries BÁO CÁO TIỂU LUẬN\par}
 \vspace{0.4cm}
 {\large Học phần: Biểu diễn tri thức và ứng dụng (Cao học)\par}
+{\large Cao học khoá K35 -- Ngành Khoa học dữ liệu\par}
 \vspace{1.6cm}
 
-{\huge\bfseries Hệ thống hỗ trợ phân tích và chẩn đoán \\[0.3em]
-sự cố hệ thống mạng và dịch vụ CNTT \\[0.3em]
-sử dụng Knowledge Graph, GraphRAG \\[0.3em]
-và Rule-Based Reasoning\par}
+{\huge\bfseries Trợ lý chẩn đoán nguyên nhân gốc rễ \\[0.3em]
+sự cố mạng/CNTT dựa trên tri thức: \\[0.3em]
+Knowledge Graph, luật suy diễn \\[0.3em]
+và GraphRAG\par}
 
 \vspace{2.2cm}
 
-\begin{flushright}
-\begin{tabular}{ll}
-Học viên thực hiện: & \textbf{Khang} \\
-Giảng viên hướng dẫn: & Giảng viên hướng dẫn học phần \\
-\end{tabular}
-\end{flushright}
+{\large Học viên thực hiện: \textbf{Khang}\par}
 
 \vfill
 {\large \today\par}
@@ -433,6 +429,17 @@ def rule_cascading_parent_failure(facts):
                 rule_id="R1_cascading_parent_failure", ...))
     return candidates
 \end{lstlisting}
+
+\paragraph{Về mặt biểu diễn: luật Horn-clause, nhưng cài đặt thủ tục hoá.} Về mặt lý thuyết, mỗi luật trong
+Bảng~\ref{tab:rules} có đúng dạng một \textbf{Horn clause} (\(P_1 \wedge P_2 \wedge \dots \Rightarrow Q\)),
+hình thức suy diễn dựa luật kinh điển. Tuy nhiên, khác với một hệ chuyên gia "thuần" (vd. cài trên nền
+Prolog hoặc CLIPS/Drools) -- nơi tập luật được lưu như \emph{dữ liệu khai báo}, tách biệt khỏi một bộ
+suy diễn tổng quát (generic inference engine) thực hiện forward/backward chaining -- bốn luật ở đây được
+\textbf{viết cứng (hard-coded) trực tiếp thành hàm Python} (Đoạn mã~\ref{lst:ruleA}), không lưu trong
+Neo4j như dữ liệu (khác với Device/Alarm/KPI -- những thực thể đó \emph{là} node/edge thật trong đồ thị).
+Nói cách khác, đây là một dạng \textbf{thủ tục hoá (procedural encoding)} của logic Horn-clause: hợp lý
+cho quy mô prototype (không cần tự viết một bộ suy diễn tổng quát), nhưng có đánh đổi rõ ràng so với một
+rule base khai báo thật sự -- thêm/sửa luật đòi hỏi sửa code Python thay vì chỉ khai báo lại dữ liệu luật.
 
 \section{Pipeline GraphRAG}
 

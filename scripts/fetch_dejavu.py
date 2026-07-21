@@ -155,15 +155,15 @@ def parse_incidents(faults_csv_text):
         category = device_category_vi(device_id)
         alarm_type = FAULT_TYPE_MAP.get(fault_desc, re.sub(r"\W+", "_", fault_desc.strip()).upper())
         incident_id = f"DEJAVU-{idx:03d}"
-        readable_time = datetime.fromtimestamp(int(row["timestamp"]), tz=timezone.utc).strftime("%d/%m/%Y %H:%M UTC")
+        readable_date = datetime.fromtimestamp(int(row["timestamp"]), tz=timezone.utc).strftime("%d/%m/%Y")
         incidents.append(
             {
                 "id": incident_id,
-                "name": f"Sự cố #{idx}: {fault_vi} tại {device_id} ({category})",
+                "name": f"#{idx}: {device_id} bị {fault_vi}",
                 "description": (
-                    f"Sự cố thật #{idx} (dataset DejaVu): thiết bị {device_id} ({category}) gặp "
-                    f"'{fault_vi}' (mã gốc trong dữ liệu: \"{fault_desc.strip()}\"). Ghi nhận lúc "
-                    f"{readable_time}. Nguyên nhân gốc rễ (ground truth): {device_id}."
+                    f"{device_id} ({category}) đang bị {fault_vi} — đây là sự cố THẬT (không phải giả lập), "
+                    f"xảy ra ngày {readable_date}, lấy từ bộ dữ liệu công khai DejaVu. Đáp án đúng đã biết "
+                    f"trước: chính là {device_id}."
                 ),
                 "alarms": [{"device": device_id, "type": alarm_type, "severity": "major"}],
                 "kpi_anomalies": [],

@@ -1,6 +1,6 @@
 # GraphRAG_Telco
 
-Prototype cho đề tài tiểu luận **"Hệ thống hỗ trợ phân tích và chẩn đoán sự cố hệ thống mạng và dịch vụ CNTT sử dụng Knowledge Graph, GraphRAG và Rule-Based Reasoning"** (học phần Biểu diễn tri thức và ứng dụng). Trọng tâm vẫn là mạng viễn thông (mô phỏng); tên đề tài mở rộng nhẹ để bao trùm luôn phần đối chiếu trên dữ liệu thật ngoài miền viễn thông (xem mục "Dữ liệu thật" bên dưới).
+Prototype cho đề tài tiểu luận **"Trợ lý chẩn đoán nguyên nhân gốc rễ sự cố mạng/CNTT dựa trên tri thức: Knowledge Graph, luật suy diễn và GraphRAG"** (học phần Biểu diễn tri thức và ứng dụng). Trọng tâm vẫn là mạng viễn thông (mô phỏng); tên đề tài mở rộng nhẹ để bao trùm luôn phần đối chiếu trên dữ liệu thật ngoài miền viễn thông (xem mục "Dữ liệu thật" bên dưới).
 
 ## Kiến trúc (bám theo mục 6 của đề cương)
 
